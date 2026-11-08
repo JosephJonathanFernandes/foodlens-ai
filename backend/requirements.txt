@@ -1,0 +1,34 @@
+# FoodLens AI Backend - Python Dependencies
+# NOTE: Python 3.14+ has limited wheels for some ML packages.
+# paddleocr / paddlepaddle are optional OCR engines and are NOT pinned here
+# because they may not ship wheels for your Python version.
+# Install them separately if available:  pip install paddleocr
+
+# FastAPI & API
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.0
+pydantic-settings>=2.0
+
+# Database & ORM
+sqlalchemy>=2.0
+alembic>=1.13
+
+# Image processing (loose pins to allow Python 3.14 wheels)
+Pillow>=10.4.0
+opencv-python-headless>=4.10.0
+numpy>=2.0.0
+
+# HTTP client (for LLM / translation APIs)
+httpx==0.27.0
+
+# Logging & environment
+python-dotenv==1.0.1
+loguru==0.7.2
+
+# Python multipart (form uploads)
+python-multipart==0.0.9
+
+# Testing
+pytest==8.3.2
+pytest-asyncio==0.24.0
