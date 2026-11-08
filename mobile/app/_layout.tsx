@@ -19,6 +19,8 @@ export default function RootLayout() {
       <Stack.Screen name="review" options={{ headerShown: false }} />
       <Stack.Screen name="report" options={{ headerShown: false }} />
       <Stack.Screen name="ocr-results" options={{ headerShown: false }} />
+      <Stack.Screen name="history" options={{ headerShown: false }} />
+      <Stack.Screen name="compare" options={{ headerShown: false }} />
     </Stack>
   );
 }

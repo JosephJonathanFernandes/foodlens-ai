@@ -82,6 +82,10 @@ export default function HomeScreen() {
             <View style={styles.buttonIcon}>🖼️</View>
             <Text style={styles.buttonTitle}>Upload Package Image</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push('/history')}>
+            <View style={styles.buttonIcon}>📜</View>
+            <Text style={styles.buttonTitle}>Scan History</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Language selector */}
