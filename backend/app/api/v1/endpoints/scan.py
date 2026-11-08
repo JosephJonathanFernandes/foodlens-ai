@@ -1,13 +1,17 @@
 """Scan endpoints: upload, process, get, history, delete."""
 
 import json
+import os
+import tempfile
 import uuid
 from typing import List, Optional
+
+import cv2
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.orm import Session
 
-from database.session import SessionLocal, engine, Base
+from database.session import SessionLocal, engine, Base, ensure_schema
 from models import scan as models
 from schemas import scan as schemas
 from services import image_service, ocr_service, preprocessing_service, text_extraction_service
@@ -21,7 +25,8 @@ from services.translation_service import TranslationService
 
 router = APIRouter()
 
-# Ensure tables exist
+# Ensure tables exist (create + simple migration)
+ensure_schema()
 Base.metadata.create_all(bind=engine)
 
 
@@ -110,20 +115,54 @@ def process_scan(
         all_fields = []
 
         for img in images:
-            # Preprocess
+            # Preprocess and assess quality
             try:
-                _, quality = preprocessing_service.preprocess(img.uri)
+                processed_image, quality = preprocessing_service.preprocess(img.uri)
+                img.set_quality(quality)
             except Exception:
                 quality = {}
+                processed_image = None
 
-            # OCR on original (preserve original)
+            # Determine which image to OCR: use preprocessed if original is blurry
+            is_blurry = quality.get("is_blurry", False) if quality else False
+            ocr_source = processed_image if (is_blurry and processed_image is not None) else img.uri
+            ocr_source_path = None
+            if processed_image is not None and is_blurry:
+                # Save preprocessed image to a temp file for OCR
+                tmp_dir = tempfile.mkdtemp()
+                ocr_source_path = os.path.join(tmp_dir, f"preprocessed_{img.id}.jpg")
+                try:
+                    cv2.imwrite(ocr_source_path, processed_image)
+                except Exception:
+                    ocr_source_path = img.uri
+            else:
+                ocr_source_path = img.uri
+
+            # OCR
             try:
                 ocr_svc = get_ocr_service()
-                ocr_results = ocr_svc.extract_text(img.uri)
-                full_text = ocr_svc.extract_full_text(img.uri)
+                ocr_results = ocr_svc.extract_text(ocr_source_path)
+                full_text = ocr_svc.extract_full_text(ocr_source_path)
+                # Clean up temp preprocessed file
+                if ocr_source_path and ocr_source_path != img.uri and os.path.exists(ocr_source_path):
+                    try:
+                        os.remove(ocr_source_path)
+                    except Exception:
+                        pass
             except Exception as e:
                 full_text = f"[OCR unavailable: {e}]"
                 ocr_results = []
+
+            # Store per-image OCR results with confidence
+            for r in ocr_results:
+                db_ocr = models.OcrResult(
+                    id=str(uuid.uuid4()),
+                    image_id=img.id,
+                    text=r.text,
+                    confidence=int(r.confidence * 100) if r.confidence is not None else None,
+                    box_json=json.dumps(list(r.box)) if r.box else None,
+                )
+                db.add(db_ocr)
 
             all_text_parts.append(f"--- Image {img.type} ---\n{full_text}")
             fields = text_extraction_service.TextExtractionService().extract_fields(full_text, source_image=img.uri)
@@ -235,7 +274,23 @@ def get_scan(scan_id: str, db: Session = Depends(get_db)):
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
     images = [
-        schemas.ScanImageBase(id=i.id, uri=i.uri, type=i.type, width=i.width, height=i.height)
+        schemas.ScanImageBase(
+            id=i.id,
+            uri=i.uri,
+            type=i.type,
+            width=i.width,
+            height=i.height,
+            quality=i.get_quality(),
+            ocr_results=[
+                schemas.OcrResultBase(
+                    id=r.id,
+                    text=r.text,
+                    confidence=r.confidence,
+                    box=r.get_box(),
+                )
+                for r in i.ocr_results
+            ],
+        )
         for i in scan.images
     ]
     return schemas.ScanOut(
@@ -246,6 +301,34 @@ def get_scan(scan_id: str, db: Session = Depends(get_db)):
         created_at=scan.created_at,
         images=images,
     )
+
+
+@router.get("/{scan_id}/ocr", response_model=List[schemas.ScanImageBase], tags=["scan"])
+def get_ocr_results(scan_id: str, db: Session = Depends(get_db)):
+    """Return per-image OCR results with confidence and quality metrics."""
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return [
+        schemas.ScanImageBase(
+            id=i.id,
+            uri=i.uri,
+            type=i.type,
+            width=i.width,
+            height=i.height,
+            quality=i.get_quality(),
+            ocr_results=[
+                schemas.OcrResultBase(
+                    id=r.id,
+                    text=r.text,
+                    confidence=r.confidence,
+                    box=r.get_box(),
+                )
+                for r in i.ocr_results
+            ],
+        )
+        for i in scan.images
+    ]
 
 
 @router.delete("/{scan_id}", tags=["scan"])

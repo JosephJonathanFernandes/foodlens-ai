@@ -73,6 +73,12 @@ export default function ReportScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Next Steps</Text>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push(`/ocr-results?scan_id=${scanId}`)}
+          >
+            <Text style={styles.actionText}>View OCR Results</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton}>
             <Text style={styles.actionText}>View ingredient explanations (Phase 3)</Text>
           </TouchableOpacity>

@@ -8,12 +8,23 @@ from pydantic import BaseModel, ConfigDict
 
 # ---- Scans ----
 
+class OcrResultBase(BaseModel):
+    id: str
+    text: str
+    confidence: Optional[int] = None  # 0-100
+    box: Optional[list] = None  # [x1, y1, x2, y2]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ScanImageBase(BaseModel):
     id: str
     uri: str
     type: str
     width: Optional[int] = None
     height: Optional[int] = None
+    quality: Optional[dict] = None  # blur_score, brightness, contrast, is_blurry
+    ocr_results: List[OcrResultBase] = []
 
     model_config = ConfigDict(from_attributes=True)
 

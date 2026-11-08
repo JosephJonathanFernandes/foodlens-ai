@@ -1,5 +1,6 @@
 """SQLAlchemy models for scans."""
 
+import json
 from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
@@ -31,9 +32,22 @@ class ScanImage(Base):
     type = Column(String, nullable=False)  # front, back, side, closeup, other
     width = Column(Integer, nullable=True)
     height = Column(Integer, nullable=True)
+    quality_json = Column(Text, nullable=True)  # JSON: blur_score, brightness, contrast, is_blurry
     created_at = Column(DateTime, default=datetime.utcnow)
 
     scan = relationship("Scan", back_populates="images")
+    ocr_results = relationship("OcrResult", back_populates="image", cascade="all, delete-orphan")
+
+    def get_quality(self) -> dict:
+        if self.quality_json:
+            try:
+                return json.loads(self.quality_json)
+            except Exception:
+                return {}
+        return {}
+
+    def set_quality(self, quality: dict):
+        self.quality_json = json.dumps(quality)
 
 
 class ScanReport(Base):
@@ -48,3 +62,24 @@ class ScanReport(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     scan = relationship("Scan", back_populates="report")
+
+
+class OcrResult(Base):
+    __tablename__ = "ocr_results"
+
+    id = Column(String, primary_key=True, index=True)
+    image_id = Column(String, ForeignKey("scan_images.id"), nullable=False)
+    text = Column(Text, nullable=False)
+    confidence = Column(Integer, nullable=True)  # 0-100
+    box_json = Column(Text, nullable=True)  # JSON: [x1, y1, x2, y2]
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    image = relationship("ScanImage", back_populates="ocr_results")
+
+    def get_box(self):
+        if self.box_json:
+            try:
+                return json.loads(self.box_json)
+            except Exception:
+                return None
+        return None
