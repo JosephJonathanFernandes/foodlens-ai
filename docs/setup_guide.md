@@ -48,7 +48,7 @@ Press `a` in the terminal to run on an Android device/emulator, or scan the QR c
 4. Tap **Submit** → images upload to the backend and are processed.
 5. The report screen opens with the processed scan.
 
-## Backend Endpoints (Phase 1)
+## Backend Endpoints
 
 - `GET /api/health`
 - `POST /api/scan/upload` (multipart, one or more images)
@@ -59,6 +59,39 @@ Press `a` in the terminal to run on an Android device/emulator, or scan the QR c
 - `POST /api/translate`
 - `POST /api/compare`
 - `GET /api/ingredients/{ingredient_id}`
+- `GET /api/scan/{scan_id}/ingredients`
+- `GET /api/scan/{scan_id}/nutrition`
+- `GET /api/scan/{scan_id}/allergens`
+- `GET /api/scan/{scan_id}/claims`
+- `GET /api/scan/report/{scan_id}`
+- `GET /api/scan/{scan_id}/ocr`
+- `POST /api/scan/translate/report`
+
+## Testing
+
+### Backend tests
+
+```powershell
+cd foodlens-ai/backend
+
+# Service unit tests (no server required)
+python tests/test_services.py
+
+# API endpoint tests (requires running server)
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python tests/test_endpoints.py
+python tests/test_report_translate.py
+
+# Or run all tests with the runner script
+python run_tests.py
+```
+
+### Mobile tests
+
+```powershell
+cd foodlens-ai/mobile
+npx jest
+```
 
 ## Notes
 

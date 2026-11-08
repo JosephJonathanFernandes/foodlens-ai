@@ -4,12 +4,9 @@ Supports configurable providers (mock, google, azure, libre).
 Preserves scientific ingredient names, numbers, units, E-numbers and INS numbers.
 """
 
-import re
 from typing import Optional, Dict, Any, List
 
 import httpx
-
-from app.core.config import settings
 
 
 # Scientific/technical terms that must NEVER be translated
@@ -22,6 +19,7 @@ PROTECTED_PATTERNS = [
 
 class TranslationService:
     def __init__(self, provider: Optional[str] = None):
+        from app.core.config import settings
         self.provider = provider or settings.TRANSLATION_PROVIDER
         self.api_key = settings.TRANSLATION_API_KEY
         self.base_url = settings.TRANSLATION_BASE_URL
@@ -50,7 +48,11 @@ class TranslationService:
         translated: Dict[str, Any] = {}
         for key, value in fields.items():
             if isinstance(value, str):
-                translated[key] = self.translate(value, target_language)
+                # Preserve pure numeric strings (e.g., "211", "350")
+                if value.strip().isdigit():
+                    translated[key] = value
+                else:
+                    translated[key] = self.translate(value, target_language)
             elif isinstance(value, dict):
                 translated[key] = self.translate_fields(value, target_language)
             elif isinstance(value, list):

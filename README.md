@@ -26,15 +26,15 @@ FoodLens AI is **not just an OCR app**. It's a complete AI-powered food-label un
 | Image review, remove, retake | ✅ Phase 1 |
 | Home dashboard with language selector | ✅ Phase 1 |
 | Backend API (upload, process, history, translate, compare, ingredient lookup) | ✅ Phase 1 |
-| Image preprocessing pipeline (OpenCV) | 🔜 Phase 2 |
-| OCR integration (PaddleOCR / Tesseract) | 🔜 Phase 2 |
-| Ingredient extraction & explanations | 🔜 Phase 3 |
-| Nutrition analysis | 🔜 Phase 3 |
-| Allergen detection | 🔜 Phase 3 |
-| AI explanations + multilingual translation | 🔜 Phase 4 |
-| Complete product report UI | 🔜 Phase 4 |
-| Scan history + product comparison | 🔜 Phase 5 |
-| Automated testing | 🔜 Phase 6 |
+| Image preprocessing pipeline (OpenCV) | ✅ Phase 2 |
+| OCR integration (PaddleOCR / Tesseract) | ✅ Phase 2 |
+| Ingredient extraction & explanations | ✅ Phase 3 |
+| Nutrition analysis | ✅ Phase 3 |
+| Allergen detection | ✅ Phase 3 |
+| AI explanations + multilingual translation | ✅ Phase 4 |
+| Complete product report UI | ✅ Phase 4 |
+| Scan history + product comparison | ✅ Phase 5 |
+| Automated testing | ✅ Phase 6 |
 
 ---
 
@@ -131,6 +131,47 @@ Press **`a`** for Android emulator, or scan the QR code with **Expo Go** on your
 3. In `mobile/.env`, set `EXPO_PUBLIC_API_BASE_URL=http://<YOUR_COMPUTER_IP>:8000`
 4. Allow port `8000` through your computer's firewall.
 5. Scan the QR code from the terminal with Expo Go.
+
+---
+
+## 🧪 Testing
+
+### Backend Tests
+
+The backend includes comprehensive test coverage:
+
+```powershell
+cd foodlens-ai/backend
+
+# Service unit tests (no server required)
+python tests/test_services.py
+
+# API endpoint tests (requires running server)
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python tests/test_endpoints.py
+python tests/test_report_translate.py
+
+# Or run with pytest
+pip install pytest
+pytest tests/
+```
+
+**Test coverage:**
+- 81 service unit tests (preprocessing, translation, AI explanation, ingredient, allergen, claims, nutrition, report)
+- 37 API endpoint tests (health, upload, process, get, history, translate, ingredient, compare, delete)
+- 28 report & translation tests (full report, translate report, sub-resources, error handling)
+
+### Mobile Tests
+
+```powershell
+cd foodlens-ai/mobile
+npm install
+npx jest
+```
+
+**Test coverage:**
+- Constants (theme colors, language list, sizes)
+- API service (health, translate, ingredient lookup, compare with mocked fetch)
 
 ---
 
