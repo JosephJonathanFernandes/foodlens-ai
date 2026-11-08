@@ -182,28 +182,121 @@ def process_scan(
             if f.name == "brand" and not brand:
                 brand = f.value
 
-        # Ingredient explanations
+        # Ingredient extraction
         ingredient_explanations = []
         ingredients_section = [c for c in classified if c.section == "ingredients"]
         ingredients_text = "\n".join(c.text for c in ingredients_section)
-        # crude ingredient split
+        # crude ingredient split - handle commas and newlines
         raw_ingredients = [i.strip() for i in ingredients_text.replace(",", "\n").splitlines() if i.strip()]
-        for raw in raw_ingredients[:50]:
-            matched = ingredient_service.match_ingredient(raw)
-            ingredient_explanations.append(ai_service.explain_ingredient(matched, language=request.language))
 
-        # Nutrition
+        extracted_ingredients = []
+        for raw in raw_ingredients[:50]:
+            match = ingredient_service.match_ingredient(raw)
+            if match:
+                kb_ing, confidence = match
+                ingredient_explanations.append(
+                    ai_service.explain_ingredient(kb_ing, language=request.language)
+                )
+                extracted_ingredients.append({
+                    "raw_name": raw,
+                    "matched": True,
+                    "confidence": round(confidence * 100),
+                    "kb_id": kb_ing["id"],
+                    "source_image": None,  # could be enhanced to track which image
+                })
+            else:
+                ingredient_explanations.append(
+                    ai_service.explain_ingredient(None, language=request.language)
+                )
+                extracted_ingredients.append({
+                    "raw_name": raw,
+                    "matched": False,
+                    "confidence": None,
+                    "kb_id": None,
+                    "source_image": None,
+                })
+
+        # Persist extracted ingredients
+        for ei in extracted_ingredients:
+            db_ing = models.ExtractedIngredient(
+                id=str(uuid.uuid4()),
+                scan_id=scan.id,
+                raw_name=ei["raw_name"],
+                matched=ei["matched"],
+                confidence=ei["confidence"],
+                kb_id=ei["kb_id"],
+                source_image_id=None,
+            )
+            db.add(db_ing)
+
+        # Nutrition extraction
         nutrition = nutrition_service.parse(combined_text)
+        extracted_nutrition = []
+        for nutrient, data in nutrition.items():
+            if data is None:
+                continue
+            extracted_nutrition.append({
+                "nutrient": nutrient,
+                "value": data.get("value"),
+                "unit": data.get("unit"),
+                "basis": data.get("basis"),
+                "raw_line": data.get("raw_line"),
+            })
+            db_nut = models.ExtractedNutrition(
+                id=str(uuid.uuid4()),
+                scan_id=scan.id,
+                nutrient=nutrient,
+                value=data.get("value"),
+                unit=data.get("unit"),
+                basis=data.get("basis"),
+                raw_line=data.get("raw_line"),
+            )
+            db.add(db_nut)
+
         nutrition_explained = {
             k: ai_service.explain_nutrition({k: v}, language=request.language) if v else None
             for k, v in nutrition.items()
         }
 
-        # Allergens
+        # Allergen extraction
         allergens = allergen_service.detect(combined_text)
+        extracted_allergens = []
+        for allergen, data in allergens.items():
+            extracted_allergens.append({
+                "allergen": allergen,
+                "declared": data.get("declared", False),
+                "warning_type": data.get("warning_type"),
+                "matched_keywords": data.get("matched_keywords", []),
+            })
+            db_all = models.ExtractedAllergen(
+                id=str(uuid.uuid4()),
+                scan_id=scan.id,
+                allergen=allergen,
+                declared=data.get("declared", False),
+                warning_type=data.get("warning_type"),
+                matched_keywords=json.dumps(data.get("matched_keywords", [])),
+            )
+            db.add(db_all)
 
-        # Claims
+        # Claims extraction
         claims = claims_service.detect(combined_text)
+        extracted_claims = []
+        for claim in claims:
+            extracted_claims.append({
+                "claim": claim["claim"],
+                "meaning": claim["meaning"],
+                "caveat": claim["caveat"],
+                "verified": claim.get("verified", False),
+            })
+            db_claim = models.ExtractedClaim(
+                id=str(uuid.uuid4()),
+                scan_id=scan.id,
+                claim=claim["claim"],
+                meaning=claim["meaning"],
+                caveat=claim["caveat"],
+                verified=claim.get("verified", False),
+            )
+            db.add(db_claim)
 
         # Translate non-scientific summary text
         summary = report_service._build_summary(product_name, ingredient_explanations, allergens)
@@ -347,3 +440,77 @@ def delete_scan(scan_id: str, db: Session = Depends(get_db)):
     db.delete(scan)
     db.commit()
     return {"detail": "Scan deleted"}
+
+
+@router.get("/{scan_id}/ingredients", response_model=List[schemas.ExtractedIngredientOut], tags=["scan"])
+def get_scan_ingredients(scan_id: str, db: Session = Depends(get_db)):
+    """Return extracted ingredients for a scan with knowledge-base matches."""
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    results = []
+    for ei in db.query(models.ExtractedIngredient).filter(models.ExtractedIngredient.scan_id == scan_id).all():
+        kb_ing = ingredient_service.get(ei.kb_id) if ei.kb_id else None
+        results.append(
+            schemas.ExtractedIngredientOut(
+                raw_name=ei.raw_name,
+                matched=ei.matched,
+                confidence=ei.confidence,
+                kb_id=ei.kb_id,
+                ingredient=schemas.IngredientOut.model_validate(kb_ing) if kb_ing else None,
+            )
+        )
+    return results
+
+
+@router.get("/{scan_id}/nutrition", response_model=List[schemas.ExtractedNutritionOut], tags=["scan"])
+def get_scan_nutrition(scan_id: str, db: Session = Depends(get_db)):
+    """Return extracted nutrition values for a scan."""
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return [
+        schemas.ExtractedNutritionOut(
+            nutrient=n.nutrient,
+            value=n.value,
+            unit=n.unit,
+            basis=n.basis,
+            raw_line=n.raw_line,
+            normalized_value=n.normalized_value,
+        )
+        for n in db.query(models.ExtractedNutrition).filter(models.ExtractedNutrition.scan_id == scan_id).all()
+    ]
+
+
+@router.get("/{scan_id}/allergens", response_model=List[schemas.ExtractedAllergenOut], tags=["scan"])
+def get_scan_allergens(scan_id: str, db: Session = Depends(get_db)):
+    """Return detected allergens for a scan."""
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return [
+        schemas.ExtractedAllergenOut(
+            allergen=a.allergen,
+            declared=a.declared,
+            warning_type=a.warning_type,
+            matched_keywords=json.loads(a.matched_keywords) if a.matched_keywords else None,
+        )
+        for a in db.query(models.ExtractedAllergen).filter(models.ExtractedAllergen.scan_id == scan_id).all()
+    ]
+
+
+@router.get("/{scan_id}/claims", response_model=List[schemas.ExtractedClaimOut], tags=["scan"])
+def get_scan_claims(scan_id: str, db: Session = Depends(get_db)):
+    """Return detected marketing claims for a scan."""
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return [
+        schemas.ExtractedClaimOut(
+            claim=c.claim,
+            meaning=c.meaning,
+            caveat=c.caveat,
+            verified=c.verified,
+        )
+        for c in db.query(models.ExtractedClaim).filter(models.ExtractedClaim.scan_id == scan_id).all()
+    ]

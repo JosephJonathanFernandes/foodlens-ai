@@ -83,3 +83,63 @@ class OcrResult(Base):
             except Exception:
                 return None
         return None
+
+
+class ExtractedIngredient(Base):
+    __tablename__ = "extracted_ingredients"
+
+    id = Column(String, primary_key=True, index=True)
+    scan_id = Column(String, ForeignKey("scans.id"), nullable=False)
+    raw_name = Column(String, nullable=False)
+    matched = Column(Boolean, default=False)
+    confidence = Column(Integer, nullable=True)  # 0-100
+    kb_id = Column(String, nullable=True)  # knowledge base id if matched
+    source_image_id = Column(String, ForeignKey("scan_images.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    scan = relationship("Scan")
+    source_image = relationship("ScanImage")
+
+
+class ExtractedNutrition(Base):
+    __tablename__ = "extracted_nutrition"
+
+    id = Column(String, primary_key=True, index=True)
+    scan_id = Column(String, ForeignKey("scans.id"), nullable=False)
+    nutrient = Column(String, nullable=False)  # energy, protein, fat, etc.
+    value = Column(String, nullable=True)
+    unit = Column(String, nullable=True)
+    basis = Column(String, nullable=True)  # per_serving, per_100g, per_pack
+    raw_line = Column(Text, nullable=True)
+    normalized_value = Column(String, nullable=True)  # per 100g normalized
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    scan = relationship("Scan")
+
+
+class ExtractedAllergen(Base):
+    __tablename__ = "extracted_allergens"
+
+    id = Column(String, primary_key=True, index=True)
+    scan_id = Column(String, ForeignKey("scans.id"), nullable=False)
+    allergen = Column(String, nullable=False)  # milk, peanuts, etc.
+    declared = Column(Boolean, default=False)
+    warning_type = Column(String, nullable=True)  # declared, may_contain, cross_contamination
+    matched_keywords = Column(Text, nullable=True)  # JSON list
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    scan = relationship("Scan")
+
+
+class ExtractedClaim(Base):
+    __tablename__ = "extracted_claims"
+
+    id = Column(String, primary_key=True, index=True)
+    scan_id = Column(String, ForeignKey("scans.id"), nullable=False)
+    claim = Column(String, nullable=False)  # natural, organic, sugar_free, etc.
+    meaning = Column(Text, nullable=True)
+    caveat = Column(Text, nullable=True)
+    verified = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    scan = relationship("Scan")

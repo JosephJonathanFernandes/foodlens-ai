@@ -127,6 +127,54 @@ class IngredientOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ExtractedIngredientOut(BaseModel):
+    raw_name: str
+    matched: bool
+    confidence: Optional[float] = None
+    kb_id: Optional[str] = None
+    ingredient: Optional[IngredientOut] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExtractedNutritionOut(BaseModel):
+    nutrient: str
+    value: Optional[str] = None
+    unit: Optional[str] = None
+    basis: Optional[str] = None
+    raw_line: Optional[str] = None
+    normalized_value: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExtractedAllergenOut(BaseModel):
+    allergen: str
+    declared: bool
+    warning_type: Optional[str] = None
+    matched_keywords: Optional[list] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExtractedClaimOut(BaseModel):
+    claim: str
+    meaning: Optional[str] = None
+    caveat: Optional[str] = None
+    verified: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---- Scan detail with extractions ----
+
+class ScanDetailOut(ScanOut):
+    ingredients: List[ExtractedIngredientOut] = []
+    nutrition: List[ExtractedNutritionOut] = []
+    allergens: List[ExtractedAllergenOut] = []
+    claims: List[ExtractedClaimOut] = []
+
+
 # ---- Error ----
 
 class ErrorResponse(BaseModel):

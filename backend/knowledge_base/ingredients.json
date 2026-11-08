@@ -139,6 +139,20 @@
       "considerations": "People with phenylketonuria (PKU) must avoid it because it contains phenylalanine.",
       "scientific_terminology": "L-aspartyl-L-phenylalanine methyl ester",
       "alternative_names": "E951, INS 951, NutraSweet"
+    },
+    {
+      "id": "artificial_colour_102",
+      "name": "Artificial Colour (INS 102)",
+      "ins_number": "102",
+      "e_number": "E102",
+      "simple_name": "Tartrazine",
+      "function": "Artificial colour / food dye",
+      "why_used": "Adds yellow colour to make food more visually appealing.",
+      "is_additive": true,
+      "regulatory_info": "Approved food colour (INS 102 / E102) within permitted limits. Some countries require warning labels about possible effects on children's activity and attention.",
+      "considerations": "May cause hypersensitivity reactions in some individuals. Some regulatory bodies require advisory labelling.",
+      "scientific_terminology": "Tartrazine (E102, INS 102)",
+      "alternative_names": "E102, INS 102, FD&C Yellow No. 5, Tartrazine"
     }
   ]
 }
