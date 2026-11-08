@@ -59,6 +59,15 @@ export const api = {
 
   getScan: (scanId: string) => request(`/api/scan/${scanId}`),
 
+  getFullReport: (scanId: string) => request(`/api/scan/report/${scanId}`),
+
+  translateReport: async (scanId: string, targetLanguage: string) => {
+    return request(
+      `/api/scan/translate/report?scan_id=${encodeURIComponent(scanId)}&target_language=${encodeURIComponent(targetLanguage)}`,
+      { method: 'POST' }
+    );
+  },
+
   getHistory: () => request('/api/scan/history'),
 
   deleteScan: (scanId: string) => request(`/api/scan/${scanId}`, { method: 'DELETE' }),

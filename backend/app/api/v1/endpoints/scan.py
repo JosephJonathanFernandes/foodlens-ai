@@ -431,7 +431,6 @@ def delete_scan(scan_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Scan not found")
     # delete associated images from disk
     for img in scan.images:
-        import os
         try:
             if os.path.exists(img.uri):
                 os.remove(img.uri)
@@ -514,3 +513,118 @@ def get_scan_claims(scan_id: str, db: Session = Depends(get_db)):
         )
         for c in db.query(models.ExtractedClaim).filter(models.ExtractedClaim.scan_id == scan_id).all()
     ]
+
+
+@router.get("/report/{scan_id}", tags=["report"])
+def get_full_report(scan_id: str, db: Session = Depends(get_db)):
+    """Return the complete 12-section report for a scan."""
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    report = {
+        "scan_id": scan.id,
+        "product_name": scan.product_name,
+        "brand": scan.brand,
+        "status": scan.status,
+        "language": "en",
+        "images": [
+            {
+                "id": i.id,
+                "uri": i.uri,
+                "type": i.type,
+                "quality": i.get_quality(),
+            }
+            for i in scan.images
+        ],
+        "ingredients": [
+            {
+                "raw_name": ei.raw_name,
+                "matched": ei.matched,
+                "confidence": ei.confidence,
+                "kb_id": ei.kb_id,
+            }
+            for ei in db.query(models.ExtractedIngredient)
+            .filter(models.ExtractedIngredient.scan_id == scan_id).all()
+        ],
+        "nutrition": [
+            {
+                "nutrient": n.nutrient,
+                "value": n.value,
+                "unit": n.unit,
+                "basis": n.basis,
+                "raw_line": n.raw_line,
+            }
+            for n in db.query(models.ExtractedNutrition)
+            .filter(models.ExtractedNutrition.scan_id == scan_id).all()
+        ],
+        "allergens": [
+            {
+                "allergen": a.allergen,
+                "declared": a.declared,
+                "warning_type": a.warning_type,
+                "matched_keywords": json.loads(a.matched_keywords) if a.matched_keywords else None,
+            }
+            for a in db.query(models.ExtractedAllergen)
+            .filter(models.ExtractedAllergen.scan_id == scan_id).all()
+        ],
+        "claims": [
+            {
+                "claim": c.claim,
+                "meaning": c.meaning,
+                "caveat": c.caveat,
+                "verified": c.verified,
+            }
+            for c in db.query(models.ExtractedClaim)
+            .filter(models.ExtractedClaim.scan_id == scan_id).all()
+        ],
+    }
+    return report
+
+
+@router.post("/translate/report", tags=["report"])
+def translate_report(
+    scan_id: str,
+    target_language: str,
+    db: Session = Depends(get_db),
+):
+    """Translate an existing report without rescanning. Preserves scientific terms."""
+    scan = db.query(models.Scan).filter(models.Scan.id == scan_id).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    if target_language == "en":
+        return {"detail": "Already in English", "language": "en"}
+
+    # Build report from DB
+    report = {
+        "scan_id": scan.id,
+        "product_name": scan.product_name,
+        "brand": scan.brand,
+        "summary": "",
+        "product_overview": {"product_name": scan.product_name, "brand": scan.brand},
+        "ingredient_explanations": [],
+        "warnings": [],
+        "claims": [],
+        "storage_and_usage": {"note": ""},
+        "language": target_language,
+    }
+
+    # Add ingredients
+    for ei in db.query(models.ExtractedIngredient).filter(models.ExtractedIngredient.scan_id == scan_id).all():
+        kb_ing = ingredient_service.get(ei.kb_id) if ei.kb_id else None
+        report["ingredient_explanations"].append({
+            "ingredient": kb_ing["name"] if kb_ing else ei.raw_name,
+            "simple_name": kb_ing.get("simple_name") if kb_ing else None,
+            "what_it_does": kb_ing.get("function") if kb_ing else None,
+            "uncertain": not ei.matched,
+        })
+
+    # Add warnings from allergens
+    allergens = db.query(models.ExtractedAllergen).filter(models.ExtractedAllergen.scan_id == scan_id).all()
+    if allergens:
+        report["warnings"].append("Allergens detected - check the Allergens tab if you have food allergies.")
+    else:
+        report["warnings"].append("No allergens detected in extracted text.")
+
+    translated = translation_service.translate_report(report, target_language)
+    return translated
